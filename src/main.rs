@@ -34,8 +34,12 @@ struct Args {
     quiet: bool,
 
     /// Maximum number of tool calls per prompt
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "50")]
     tool_call_limit: usize,
+
+    /// Choose a persona for the agent
+    #[arg(long, help = format!("Choose a persona for the agent. Available built-in personas:\n{}", picocode::persona::list_personas()))]
+    persona: Option<String>,
 }
 
 #[tokio::main]
@@ -48,6 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let system_message_extension = picocode::agent::load_agents_md();
+    let persona_prompt = args.persona.as_ref().and_then(|p| picocode::persona::get_persona(p));
+    let persona_name = args.persona.clone();
 
     let model = args.model.clone().unwrap_or_else(|| match args.provider.as_str() {
         "anthropic" => "claude-3-5-sonnet-20241022".to_string(),
@@ -79,6 +85,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         yolo: args.yolo,
         tool_call_limit: args.tool_call_limit,
         system_message_extension,
+        persona_prompt,
+        persona_name,
     }).await?;
 
     match args.input {

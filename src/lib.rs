@@ -3,6 +3,7 @@ use thiserror::Error;
 pub mod agent;
 pub mod output;
 pub mod tools;
+pub mod persona;
 
 // Re-export core rig types for library users
 pub use rig::agent::AgentBuilder;

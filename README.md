@@ -85,6 +85,39 @@ let output = Arc::new(NoOutput);
 let response = agent.run_once("Your prompt".into()).await?;
 ```
 
+## 🎭 Personalities & Fun
+
+Who says AI agents have to be boring? **picocode** believes that coding should be productive *and* enjoyable. You can give your agent a personality to change how it communicates and approaches problems.
+
+### Using Personas
+Select a built-in persona with the `--persona` flag:
+```bash
+picocode --persona architect
+```
+
+Or load a custom persona from a markdown file:
+```bash
+picocode --persona my-custom-persona.md
+```
+
+### Built-in Personas
+
+| Persona | Description |
+| :--- | :--- |
+| `architect` | A hands-on software architect who loves Van Halen and hard rock. |
+| `strict` | A very strict software engineer who operates with Swiss clock precision. |
+| `security` | An all-knowing security analyst who loves Bruce Schneier facts. |
+| `zen` | A Zen Master who views coding as a form of meditation. |
+| `hacker` | A chaotic good hacker obsessed with elegant hacks and performance. |
+| `guru` | A Silicon Valley guru obsessed with disruption and scale. |
+| `sysadmin` | A grumpy, old-school sysadmin who has seen it all. |
+| `academic` | A formal academic who cites papers and prefers theoretical correctness. |
+| `hustler` | A startup hustler who moves fast and breaks things. |
+| `craftsman` | A web craftsman obsessed with accessibility and the open web. |
+| `sre` | An SRE ninja who focuses on reliability and observability. |
+| `maintainer` | A patient open source maintainer who loves documentation. |
+| `tester` | A destructive QA tester who lives to find edge cases. |
+
 ## 🛡 Safety & Control
 
 Picocode is designed to be a "tool in your hand," not a "ghost in your machine." 

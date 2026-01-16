@@ -23,7 +23,15 @@ pub trait Output: Send + Sync {
     fn display_separator(&self);
     fn display_thinking(&self, message: &str);
     fn stop_thinking(&self);
-    fn display_header(&self, provider: &str, model: &str, bash: bool, yolo: bool, limit: usize);
+    fn display_header(
+        &self,
+        provider: &str,
+        model: &str,
+        bash: bool,
+        yolo: bool,
+        limit: usize,
+        persona: Option<&str>,
+    );
 }
 
 pub struct QuietOutput {
@@ -85,7 +93,16 @@ impl Output for QuietOutput {
             pb.finish_and_clear();
         }
     }
-    fn display_header(&self, _provider: &str, _model: &str, _bash: bool, _yolo: bool, _limit: usize) {}
+    fn display_header(
+        &self,
+        _provider: &str,
+        _model: &str,
+        _bash: bool,
+        _yolo: bool,
+        _limit: usize,
+        _persona: Option<&str>,
+    ) {
+    }
 }
 
 pub struct NoOutput;
@@ -105,7 +122,16 @@ impl Output for NoOutput {
     fn display_separator(&self) {}
     fn display_thinking(&self, _message: &str) {}
     fn stop_thinking(&self) {}
-    fn display_header(&self, _provider: &str, _model: &str, _bash: bool, _yolo: bool, _limit: usize) {}
+    fn display_header(
+        &self,
+        _provider: &str,
+        _model: &str,
+        _bash: bool,
+        _yolo: bool,
+        _limit: usize,
+        _persona: Option<&str>,
+    ) {
+    }
 }
 
 pub struct LogOutput;
@@ -145,8 +171,16 @@ impl Output for LogOutput {
 
     fn stop_thinking(&self) {}
 
-    fn display_header(&self, provider: &str, model: &str, bash: bool, yolo: bool, limit: usize) {
-        tracing::info!(target: "picocode", "picocode | {} | {} | bash:{} yolo:{} limit:{}", provider, model, bash, yolo, limit);
+    fn display_header(
+        &self,
+        provider: &str,
+        model: &str,
+        bash: bool,
+        yolo: bool,
+        limit: usize,
+        persona: Option<&str>,
+    ) {
+        tracing::info!(target: "picocode", "picocode | {} | {} | persona:{} | bash:{} yolo:{} limit:{}", provider, model, persona.unwrap_or("default"), bash, yolo, limit);
     }
 }
 
@@ -349,7 +383,15 @@ impl Output for ConsoleOutput {
         }
     }
 
-    fn display_header(&self, provider: &str, model: &str, bash: bool, yolo: bool, limit: usize) {
+    fn display_header(
+        &self,
+        provider: &str,
+        model: &str,
+        bash: bool,
+        yolo: bool,
+        limit: usize,
+        persona: Option<&str>,
+    ) {
         let status = |active, label, color: fn(StyledObject<String>) -> StyledObject<String>| {
             let s = style(format!("[{}] {}", if active { "x" } else { " " }, label));
             if active {
@@ -363,11 +405,19 @@ impl Output for ConsoleOutput {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| "unknown".into());
 
-        println!(
-            "{} | {} ({}) | {} | {} | {} | {}",
+        print!(
+            "{} | {} ({})",
             style("picocode").bold(),
             style(provider).cyan(),
             style(model).blue(),
+        );
+
+        if let Some(p) = persona {
+            print!(" | {}", style(p).magenta());
+        }
+
+        println!(
+            " | {} | {} | {} | {}",
             status(bash, "bash", |s| s.green()),
             status(yolo, "yolo", |s| s.red()),
             style(format!("limit:{}", limit)).yellow(),

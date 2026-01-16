@@ -33,6 +33,7 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
             self.bash,
             self.yolo,
             self.tool_call_limit,
+            self.persona_name.as_deref(),
         );
         let mut history = Vec::new();
         loop {
@@ -59,6 +60,7 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
             self.bash,
             self.yolo,
             self.tool_call_limit,
+            self.persona_name.as_deref(),
         );
         self.output.display_separator();
         let response = self.prompt(&input, None).await?;
@@ -85,6 +87,7 @@ pub struct CodeAgent<M: CompletionModel> {
     model: String,
     bash: bool,
     yolo: bool,
+    persona_name: Option<String>,
 }
 
 pub struct AgentConfig {
@@ -95,6 +98,8 @@ pub struct AgentConfig {
     pub yolo: bool,
     pub tool_call_limit: usize,
     pub system_message_extension: Option<String>,
+    pub persona_prompt: Option<String>,
+    pub persona_name: Option<String>,
 }
 
 pub async fn create_agent(config: AgentConfig) -> Result<Box<dyn PicoAgent>> {
@@ -110,6 +115,7 @@ pub async fn create_agent(config: AgentConfig) -> Result<Box<dyn PicoAgent>> {
                 config.yolo,
                 config.output.clone(),
                 config.system_message_extension,
+                config.persona_prompt,
             );
 
             Box::new(CodeAgent::new(
@@ -120,6 +126,7 @@ pub async fn create_agent(config: AgentConfig) -> Result<Box<dyn PicoAgent>> {
                 model,
                 config.use_bash,
                 config.yolo,
+                config.persona_name,
             ))
         }};
     }
@@ -198,11 +205,15 @@ fn build_rig_agent<M: CompletionModel>(
     yolo: bool,
     output: Arc<dyn Output>,
     system_message_extension: Option<String>,
+    persona_prompt: Option<String>,
 ) -> Agent<M> {
     let cwd = std::env::current_dir()
         .map(|p| p.display().to_string())
         .unwrap_or_default();
     let mut system_message = format!("Concise coding assistant. cwd: {}", cwd);
+    if let Some(persona) = persona_prompt {
+        system_message = format!("{}\n\n{}", persona, system_message);
+    }
     if let Some(ext) = system_message_extension {
         system_message.push_str("\n\n");
         system_message.push_str(&ext);
@@ -291,6 +302,7 @@ impl<M: CompletionModel + 'static> CodeAgent<M> {
         model: String,
         bash: bool,
         yolo: bool,
+        persona_name: Option<String>,
     ) -> Self {
         Self {
             agent,
@@ -300,6 +312,7 @@ impl<M: CompletionModel + 'static> CodeAgent<M> {
             model,
             bash,
             yolo,
+            persona_name,
         }
     }
 
