@@ -1,0 +1,37 @@
+use thiserror::Error;
+
+pub mod agent;
+pub mod output;
+pub mod tools;
+
+// Re-export core rig types for library users
+pub use rig::agent::AgentBuilder;
+pub use rig::client::{CompletionClient, ProviderClient};
+pub use rig::completion::CompletionModel;
+pub use rig::providers;
+
+pub use agent::{create_agent, load_agents_md, AgentConfig, CodeAgent, PicoAgent};
+pub use output::{Confirmation, ConsoleOutput, LogOutput, NoOutput, Output, QuietOutput};
+
+#[derive(Error, Debug)]
+pub enum PicocodeError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
+
+    #[error("Tool error: {0}")]
+    Tool(String),
+
+    #[error("LLM error: {0}")]
+    Llm(String),
+
+    #[error("Regex error: {0}")]
+    Regex(#[from] regex::Error),
+
+    #[error("Other error: {0}")]
+    Other(String),
+}
+
+pub type Result<T> = std::result::Result<T, PicocodeError>;

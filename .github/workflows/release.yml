@@ -1,0 +1,191 @@
+name: Release
+
+# Release workflow: builds and attaches binaries to GitHub releases
+# Only triggers on version tags matching v*.*.* pattern (e.g., v1.2.3)
+# Tag detection: uses GitHub's tag ref format, validates with regex
+
+# Project-specific variables - customize these for your project
+# Note: TAG_PATTERN in the 'on' section must be static (no expressions allowed)
+env:
+  BINARY_NAME: picocode
+
+on:
+  push:
+    tags:
+      # Customize this pattern to match your version tag format (e.g., "v*.*.*", "release-*")
+      - "v*.*.*"
+
+jobs:
+  # Release build job: produces binaries for all supported platforms
+  # Uses matrix strategy to build in parallel across platforms
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    env:
+      # Project-specific: customize the Rust toolchain version (e.g., "stable", "1.75.0", "nightly")
+      RUST_TOOLCHAIN: stable
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64: most common Linux platform
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-x86_64
+            archive_format: tar.gz
+          # Linux aarch64: ARM-based Linux systems
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-aarch64
+            archive_format: tar.gz
+          # macOS x86_64: Intel Macs
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            platform: macos-x86_64
+            archive_format: tar.gz
+          # macOS aarch64: Apple Silicon Macs
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            platform: macos-aarch64
+            archive_format: tar.gz
+          # Windows x86_64: standard Windows platform
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            platform: windows-x86_64
+            archive_format: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Compute binary and archive names from project variables
+      - name: Set binary and archive names
+        id: names
+        run: |
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            BINARY_NAME="${{ env.BINARY_NAME }}.exe"
+          else
+            BINARY_NAME="${{ env.BINARY_NAME }}"
+          fi
+          ARCHIVE_NAME="${{ env.BINARY_NAME }}-${{ matrix.platform }}.${{ matrix.archive_format }}"
+          echo "binary_name=$BINARY_NAME" >> $GITHUB_OUTPUT
+          echo "archive_name=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      # Cross-compilation setup: install target and toolchain
+      - name: Install cross-compilation dependencies (Linux aarch64)
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          rustup target add ${{ matrix.target }}
+
+      - name: Install target
+        if: matrix.target != 'aarch64-unknown-linux-gnu' || matrix.os != 'ubuntu-latest'
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      # Deterministic release build: optimized, stripped of debug info
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          # Cross-compilation linker: use aarch64 gcc for Linux ARM builds
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      # Archive creation: wrap binary in platform-appropriate archive format
+      # Linux/macOS: tar.gz (standard for Unix-like systems)
+      # Windows: zip (standard for Windows)
+      - name: Create archive (Unix)
+        if: matrix.archive_format == 'tar.gz'
+        run: |
+          # Create tar.gz archive: standard format for Linux and macOS
+          tar czf ${{ steps.names.outputs.archive_name }} -C target/${{ matrix.target }}/release ${{ steps.names.outputs.binary_name }}
+        shell: bash
+
+      - name: Create archive (Windows)
+        if: matrix.archive_format == 'zip'
+        run: |
+          # Create zip archive: standard format for Windows using PowerShell
+          $binaryPath = "target\${{ matrix.target }}\release\${{ steps.names.outputs.binary_name }}"
+          $archivePath = "${{ steps.names.outputs.archive_name }}"
+          Compress-Archive -Path $binaryPath -DestinationPath $archivePath -Force
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.names.outputs.archive_name }}
+          path: ${{ steps.names.outputs.archive_name }}
+          retention-days: 1
+
+  # Release upload job: collects all artifacts and attaches to GitHub release
+  # Runs after all builds complete (or fail) to ensure we have all binaries
+  upload:
+    name: Upload Release
+    needs: build
+    runs-on: ubuntu-latest
+    # Only run if release exists (tag was pushed and release was created)
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download all artifacts from build matrix
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: "*"
+          merge-multiple: false
+
+      # Extract version tag: strips 'refs/tags/' prefix to get tag name (e.g., v1.2.3)
+      - name: Extract version tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      # Flatten artifacts: download-artifact creates subdirectories, flatten to root
+      # All artifacts are now archives (tar.gz for Unix, zip for Windows)
+      # download-artifact with merge-multiple: false creates: artifacts/{artifact-name}/{file}
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release-archives
+          # Copy all files from artifact subdirectories to release-archives
+          for dir in artifacts/*/; do
+            if [ -d "$dir" ]; then
+              cp "$dir"*.tar.gz release-archives/ 2>/dev/null || true
+              cp "$dir"*.zip release-archives/ 2>/dev/null || true
+            fi
+          done
+          ls -lh release-archives/
+
+      # Attach artifacts to release: creates release if missing, uploads all archives
+      # Archive naming: platform-specific archives (tar.gz for Unix, zip for Windows)
+      - name: Attach artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-archives/*
+          tag_name: ${{ steps.tag.outputs.tag }}
+          generate_release_notes: false
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

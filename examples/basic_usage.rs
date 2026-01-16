@@ -1,0 +1,32 @@
+use picocode::{create_agent, AgentConfig, ConsoleOutput};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Setup the output handler (ConsoleOutput provides pretty terminal printing)
+    let output = Arc::new(ConsoleOutput::new());
+
+    // 2. Create the agent with a simple config struct
+    // You no longer need to manually initialize Rig clients or builders.
+    let agent = create_agent(AgentConfig {
+        provider: "anthropic".into(),
+        model: "claude-3-5-sonnet-latest".into(),
+        output,
+        use_bash: true,
+        yolo: false,
+        tool_call_limit: 10,
+        system_message_extension: None,
+    }).await?;
+
+    println!("--- Picocode Library Example ---");
+    println!("Asking the agent to analyze the current directory...\n");
+
+    // 3. Run a task and get the response!
+    let response = agent
+        .run_once("List the files in the current directory and explain what this project seems to be.".into())
+        .await?;
+
+    println!("\nFinal Response captured in library mode:\n{}", response);
+
+    Ok(())
+}
