@@ -27,7 +27,6 @@ pub trait Output: Send + Sync {
         &self,
         provider: &str,
         model: &str,
-        bash: bool,
         yolo: bool,
         limit: usize,
         persona: Option<&str>,
@@ -97,7 +96,6 @@ impl Output for QuietOutput {
         &self,
         _provider: &str,
         _model: &str,
-        _bash: bool,
         _yolo: bool,
         _limit: usize,
         _persona: Option<&str>,
@@ -126,7 +124,6 @@ impl Output for NoOutput {
         &self,
         _provider: &str,
         _model: &str,
-        _bash: bool,
         _yolo: bool,
         _limit: usize,
         _persona: Option<&str>,
@@ -175,12 +172,11 @@ impl Output for LogOutput {
         &self,
         provider: &str,
         model: &str,
-        bash: bool,
         yolo: bool,
         limit: usize,
         persona: Option<&str>,
     ) {
-        tracing::info!(target: "picocode", "picocode | {} | {} | persona:{} | bash:{} yolo:{} limit:{}", provider, model, persona.unwrap_or("default"), bash, yolo, limit);
+        tracing::info!(target: "picocode", "picocode | {} | {} | persona:{} | yolo:{} limit:{}", provider, model, persona.unwrap_or("default"), yolo, limit);
     }
 }
 
@@ -387,7 +383,6 @@ impl Output for ConsoleOutput {
         &self,
         provider: &str,
         model: &str,
-        bash: bool,
         yolo: bool,
         limit: usize,
         persona: Option<&str>,
@@ -435,8 +430,7 @@ impl Output for ConsoleOutput {
         }
 
         println!(
-            " | {} | {} | {} | {}",
-            status(bash, "bash", |s| s.green()),
+            " | {} | {} | {}",
             status(yolo, "yolo", |s| s.red()),
             style(format!("limit:{}", limit)).yellow(),
             style(cwd).dim()

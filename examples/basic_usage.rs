@@ -12,13 +12,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         provider: "anthropic".into(),
         model: "claude-3-5-sonnet-latest".into(),
         output,
-        use_bash: true,
         yolo: false,
         tool_call_limit: 10,
         system_message_extension: None,
         persona_prompt: None,
         persona_name: None,
         bash_auto_allow: None,
+        agent_prompt: None,
     }).await?;
 
     println!("--- Picocode Library Example ---");

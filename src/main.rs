@@ -16,10 +16,6 @@ struct Args {
     #[arg(short, long, global = true)]
     model: Option<String>,
 
-    /// Include the bash tool
-    #[arg(long, global = true)]
-    bash: Option<bool>,
-
     /// Run destructive tools without confirmation
     #[arg(long, global = true)]
     yolo: Option<bool>,
@@ -72,11 +68,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .or_else(|| recipe.as_ref().and_then(|r| r.model.clone()))
         .unwrap_or_else(|| default_model(&provider));
 
-    let use_bash = args
-        .bash
-        .or_else(|| recipe.as_ref().and_then(|r| r.bash))
-        .unwrap_or(false);
-
     let yolo = args
         .yolo
         .or_else(|| recipe.as_ref().and_then(|r| r.yolo))
@@ -101,13 +92,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         provider: provider.clone(),
         model,
         output,
-        use_bash,
         yolo,
         tool_call_limit: args.tool_call_limit,
         system_message_extension,
         persona_prompt,
         persona_name,
         bash_auto_allow: Some(config.get_bash_auto_allow()),
+        agent_prompt: config.agent_prompt.clone(),
     })
     .await?;
 

@@ -42,7 +42,7 @@ Since it's a CLI tool, you can easily use it within your own shell scripts. For 
 
 ```bash
 # Ask picocode to refactor a file and get the output directly
-picocode --input "Rewrite src/main.rs to use the anyhow crate" --yolo --bash
+picocode --input "Rewrite src/main.rs to use the anyhow crate" --yolo
 ```
 
 ### Use as a Library
@@ -62,12 +62,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         provider: "anthropic".into(),
         model: "claude-3-5-sonnet-latest".into(),
         output,
-        use_bash: true,
         yolo: false,
         tool_call_limit: 10,
         system_message_extension: None,
         persona_prompt: None,
         persona_name: None,
+        bash_auto_allow: None,
     }).await?;
 
     let response = agent.run_once("Analyze the current project".into()).await?;
@@ -136,7 +136,7 @@ recipes:
   review-security:
     prompt: "Review the codebase for security issues."
     persona: "security"
-    bash: true
+    yolo: false
 ```
 
 ### Verb-based CLI Usage
@@ -146,7 +146,7 @@ recipes:
 picocode chat
 
 # Single prompt input
-picocode input "Rewrite src/main.rs to use anyhow" --yolo --bash
+picocode input "Rewrite src/main.rs to use anyhow" --yolo
 
 # Run a pre-defined recipe
 picocode recipe review-security

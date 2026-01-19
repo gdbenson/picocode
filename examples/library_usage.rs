@@ -11,13 +11,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         provider: "anthropic".into(),
         model: "claude-3-5-sonnet-latest".into(),
         output,
-        use_bash: false,
         yolo: true, // Auto-confirm everything since there's no output
         tool_call_limit: 5,
         system_message_extension: None,
         persona_prompt: None,
         persona_name: None,
         bash_auto_allow: None,
+        agent_prompt: None,
     }).await?;
 
     println!("Running agent in silent mode...");

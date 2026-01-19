@@ -1,5 +1,8 @@
 # picocode.yaml example
 
+# Custom agent prompt (replaces the default "Concise coding assistant" prompt)
+# agent_prompt: "You are a senior software engineer specialized in Rust and systems programming."
+
 # Tool-specific configurations
 tool_config:
   bash:
@@ -17,15 +20,12 @@ recipes:
     provider: "anthropic"
     model: "claude-3-5-sonnet-20241022"
     persona: "security"
-    bash: true
     yolo: false
 
   simplify:
     prompt: "Refactor the most complex functions in the current directory to be simpler and more readable. Maintain the same behavior."
-    bash: true
     yolo: true
 
   fix-lints:
     prompt: "Run the project's linter and fix all reported issues."
-    bash: true
     yolo: true

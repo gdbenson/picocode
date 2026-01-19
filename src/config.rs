@@ -5,6 +5,8 @@ use std::path::Path;
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Config {
     #[serde(default)]
+    pub agent_prompt: Option<String>,
+    #[serde(default)]
     pub tool_config: HashMap<String, ToolSettings>,
     #[serde(default)]
     pub recipes: HashMap<String, Recipe>,
@@ -22,7 +24,6 @@ pub struct Recipe {
     pub provider: Option<String>,
     pub model: Option<String>,
     pub persona: Option<String>,
-    pub bash: Option<bool>,
     pub yolo: Option<bool>,
 }
 
