@@ -24,6 +24,12 @@ Rather than being a "do-it-all" platform, **picocode** focuses on being a reliab
 
 ### Installation
 
+**One-line install (macOS/Linux):**
+```bash
+curl -sSfL https://raw.githubusercontent.com/jondot/picocode/main/install.sh | sh
+```
+
+**Using Cargo:**
 ```bash
 cargo install --path .
 ```
