@@ -48,7 +48,35 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
+    std::panic::set_hook(Box::new(|info| {
+        let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic".to_string()
+        };
+
+        eprintln!("\n\n--------------------------------------------------------------------------------");
+        eprintln!("💥 Picocode encountered an unexpected error (panic).");
+        eprintln!("Message: {}", message);
+        if let Some(location) = info.location() {
+            eprintln!("Location: {}:{}:{}", location.file(), location.line(), location.column());
+        }
+        eprintln!("--------------------------------------------------------------------------------");
+        eprintln!("This is likely a bug in picocode or one of its dependencies.");
+        eprintln!("Please report it at: https://github.com/jondot/picocode/issues");
+        eprintln!("--------------------------------------------------------------------------------\n");
+    }));
+
+    if let Err(e) = run().await {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let config = Config::load();
 

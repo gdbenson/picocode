@@ -129,25 +129,88 @@ pub async fn create_agent(config: AgentConfig) -> Result<Box<dyn PicoAgent>> {
         }};
     }
 
+    macro_rules! check_env {
+        ($var:expr) => {
+            if std::env::var($var).is_err() {
+                return Err(crate::PicocodeError::MissingApiKey(
+                    provider.to_string(),
+                    $var.to_string(),
+                ));
+            }
+        };
+    }
+
     let agent: Box<dyn PicoAgent> = match provider.as_str() {
-        "anthropic" => build!(anthropic::Client::from_env()),
-        "openai" => build!(openai::Client::from_env()),
-        "azure" => build!(azure::Client::from_env()),
-        "cohere" => build!(cohere::Client::from_env()),
-        "deepseek" => build!(deepseek::Client::from_env()),
-        "galadriel" => build!(galadriel::Client::from_env()),
-        "gemini" | "google" => build!(gemini::Client::from_env()),
-        "groq" => build!(groq::Client::from_env()),
-        "huggingface" => build!(huggingface::Client::from_env()),
-        "hyperbolic" => build!(hyperbolic::Client::from_env()),
-        "mira" => build!(mira::Client::from_env()),
-        "mistral" => build!(mistral::Client::from_env()),
-        "moonshot" => build!(moonshot::Client::from_env()),
+        "anthropic" => {
+            check_env!("ANTHROPIC_API_KEY");
+            build!(anthropic::Client::from_env())
+        }
+        "openai" => {
+            check_env!("OPENAI_API_KEY");
+            build!(openai::Client::from_env())
+        }
+        "azure" => {
+            check_env!("AZURE_OPENAI_API_KEY");
+            check_env!("AZURE_OPENAI_ENDPOINT");
+            build!(azure::Client::from_env())
+        }
+        "cohere" => {
+            check_env!("COHERE_API_KEY");
+            build!(cohere::Client::from_env())
+        }
+        "deepseek" => {
+            check_env!("DEEPSEEK_API_KEY");
+            build!(deepseek::Client::from_env())
+        }
+        "galadriel" => {
+            check_env!("GALADRIEL_API_KEY");
+            build!(galadriel::Client::from_env())
+        }
+        "gemini" | "google" => {
+            check_env!("GOOGLE_API_KEY");
+            build!(gemini::Client::from_env())
+        }
+        "groq" => {
+            check_env!("GROQ_API_KEY");
+            build!(groq::Client::from_env())
+        }
+        "huggingface" => {
+            check_env!("HF_TOKEN");
+            build!(huggingface::Client::from_env())
+        }
+        "hyperbolic" => {
+            check_env!("HYPERBOLIC_API_KEY");
+            build!(hyperbolic::Client::from_env())
+        }
+        "mira" => {
+            check_env!("MIRA_API_KEY");
+            build!(mira::Client::from_env())
+        }
+        "mistral" => {
+            check_env!("MISTRAL_API_KEY");
+            build!(mistral::Client::from_env())
+        }
+        "moonshot" => {
+            check_env!("MOONSHOT_API_KEY");
+            build!(moonshot::Client::from_env())
+        }
         "ollama" => build!(ollama::Client::from_env()),
-        "openrouter" => build!(openrouter::Client::from_env()),
-        "perplexity" => build!(perplexity::Client::from_env()),
-        "together" => build!(together::Client::from_env()),
-        "xai" => build!(xai::Client::from_env()),
+        "openrouter" => {
+            check_env!("OPENROUTER_API_KEY");
+            build!(openrouter::Client::from_env())
+        }
+        "perplexity" => {
+            check_env!("PERPLEXITY_API_KEY");
+            build!(perplexity::Client::from_env())
+        }
+        "together" => {
+            check_env!("TOGETHER_API_KEY");
+            build!(together::Client::from_env())
+        }
+        "xai" => {
+            check_env!("XAI_API_KEY");
+            build!(xai::Client::from_env())
+        }
         _ => {
             return Err(crate::PicocodeError::Other(format!(
                 "Unsupported provider: {}",

@@ -31,6 +31,9 @@ pub enum PicocodeError {
     #[error("LLM error: {0}")]
     Llm(String),
 
+    #[error("Missing API key for provider {0}. Please set the {1} environment variable.")]
+    MissingApiKey(String, String),
+
     #[error("Regex error: {0}")]
     Regex(#[from] regex::Error),
 
