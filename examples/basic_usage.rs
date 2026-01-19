@@ -16,6 +16,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         yolo: false,
         tool_call_limit: 10,
         system_message_extension: None,
+        persona_prompt: None,
+        persona_name: None,
+        bash_auto_allow: None,
     }).await?;
 
     println!("--- Picocode Library Example ---");

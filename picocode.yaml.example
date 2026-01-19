@@ -1,0 +1,31 @@
+# picocode.yaml example
+
+# Tool-specific configurations
+tool_config:
+  bash:
+    # Commands that will be automatically allowed without prompting (when yolo is false)
+    auto_allow:
+      - "^ls -la"
+      - "^git status"
+      - "^cargo test"
+      - "^npm test"
+
+# Named recipes for non-interactive execution (CI/CD, automation)
+recipes:
+  review-security:
+    prompt: "Review the codebase for security issues and vulnerabilities. Exit with a clear summary and indicate if the build should break."
+    provider: "anthropic"
+    model: "claude-3-5-sonnet-20241022"
+    persona: "security"
+    bash: true
+    yolo: false
+
+  simplify:
+    prompt: "Refactor the most complex functions in the current directory to be simpler and more readable. Maintain the same behavior."
+    bash: true
+    yolo: true
+
+  fix-lints:
+    prompt: "Run the project's linter and fix all reported issues."
+    bash: true
+    yolo: true

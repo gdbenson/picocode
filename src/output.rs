@@ -392,6 +392,24 @@ impl Output for ConsoleOutput {
         limit: usize,
         persona: Option<&str>,
     ) {
+        let width = Term::stdout().size().1 as usize;
+        let avatar = [
+            "    ▄     ▄    ",
+            "   ███   ███   ",
+            "  ███████████  ",
+            " ███ █   █ ███ ",
+            " █████████████ ",
+            "   ███   ███   ",
+            "  ██       ██  ",
+        ];
+
+        println!();
+        for line in avatar {
+            let padding = width.saturating_sub(15) / 2;
+            println!("{}{}", " ".repeat(padding), style(line).cyan());
+        }
+        println!();
+
         let status = |active, label, color: fn(StyledObject<String>) -> StyledObject<String>| {
             let s = style(format!("[{}] {}", if active { "x" } else { " " }, label));
             if active {

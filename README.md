@@ -66,6 +66,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         yolo: false,
         tool_call_limit: 10,
         system_message_extension: None,
+        persona_prompt: None,
+        persona_name: None,
     }).await?;
 
     let response = agent.run_once("Analyze the current project".into()).await?;
@@ -117,6 +119,38 @@ picocode --persona my-custom-persona.md
 | `sre` | An SRE ninja who focuses on reliability and observability. |
 | `maintainer` | A patient open source maintainer who loves documentation. |
 | `tester` | A destructive QA tester who lives to find edge cases. |
+
+## ⚙️ Configuration & Recipes
+
+Picocode can be configured via a `picocode.yaml` file in your project root. This allows you to define tool-specific settings and reusable "recipes" for automation.
+
+### `picocode.yaml` Example
+```yaml
+tool_config:
+  bash:
+    auto_allow:
+      - "^ls -la"
+      - "^git status"
+
+recipes:
+  review-security:
+    prompt: "Review the codebase for security issues."
+    persona: "security"
+    bash: true
+```
+
+### Verb-based CLI Usage
+
+```bash
+# Interactive chat (default)
+picocode chat
+
+# Single prompt input
+picocode input "Rewrite src/main.rs to use anyhow" --yolo --bash
+
+# Run a pre-defined recipe
+picocode recipe review-security
+```
 
 ## 🛡 Safety & Control
 

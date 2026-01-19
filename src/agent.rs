@@ -100,6 +100,7 @@ pub struct AgentConfig {
     pub system_message_extension: Option<String>,
     pub persona_prompt: Option<String>,
     pub persona_name: Option<String>,
+    pub bash_auto_allow: Option<Vec<String>>,
 }
 
 pub async fn create_agent(config: AgentConfig) -> Result<Box<dyn PicoAgent>> {
@@ -116,6 +117,7 @@ pub async fn create_agent(config: AgentConfig) -> Result<Box<dyn PicoAgent>> {
                 config.output.clone(),
                 config.system_message_extension,
                 config.persona_prompt,
+                config.bash_auto_allow.unwrap_or_default(),
             );
 
             Box::new(CodeAgent::new(
@@ -206,6 +208,7 @@ fn build_rig_agent<M: CompletionModel>(
     output: Arc<dyn Output>,
     system_message_extension: Option<String>,
     persona_prompt: Option<String>,
+    bash_auto_allow: Vec<String>,
 ) -> Agent<M> {
     let cwd = std::env::current_dir()
         .map(|p| p.display().to_string())
@@ -229,16 +232,28 @@ fn build_rig_agent<M: CompletionModel>(
         .tool(ListDir);
 
     builder = builder
-        .tool(guard(MakeDir, yolo, output.clone()))
-        .tool(guard(Remove, yolo, output.clone()))
-        .tool(guard(MoveFile, yolo, output.clone()))
-        .tool(guard(CopyFile, yolo, output.clone()));
+        .tool(guard(MakeDir, yolo, output.clone(), None))
+        .tool(guard(Remove, yolo, output.clone(), None))
+        .tool(guard(MoveFile, yolo, output.clone(), None))
+        .tool(guard(CopyFile, yolo, output.clone(), None));
 
     if use_bash {
-        builder = builder.tool(guard(Bash, yolo, output.clone()));
+        let auto_allow = bash_auto_allow.clone();
+        builder = builder.tool(guard(
+            Bash,
+            yolo,
+            output.clone(),
+            Some(Arc::new(move |args| {
+                auto_allow.iter().any(|pattern| {
+                    regex::Regex::new(pattern)
+                        .map(|re| re.is_match(&args.cmd))
+                        .unwrap_or(false)
+                })
+            })),
+        ));
     }
     if is_tool_available("agent-browser") {
-        builder = builder.tool(guard(AgentBrowser, yolo, output.clone()));
+        builder = builder.tool(guard(AgentBrowser, yolo, output.clone(), None));
     }
     builder.build()
 }
@@ -250,6 +265,7 @@ struct Guard<T: Tool> {
     yolo: bool,
     output: Arc<dyn Output>,
     always: Arc<AtomicBool>,
+    auto_approve: Option<Arc<dyn Fn(&T::Args) -> bool + Send + Sync>>,
 }
 
 impl<T: Tool<Error = crate::tools::ToolError>> Tool for Guard<T> {
@@ -264,7 +280,13 @@ impl<T: Tool<Error = crate::tools::ToolError>> Tool for Guard<T> {
     }
 
     async fn call(&self, args: Self::Args) -> std::result::Result<Self::Output, Self::Error> {
-        if !self.yolo && !self.always.load(Ordering::Relaxed) {
+        let should_auto_approve = self
+            .auto_approve
+            .as_ref()
+            .map(|f| f(&args))
+            .unwrap_or(false);
+
+        if !self.yolo && !self.always.load(Ordering::Relaxed) && !should_auto_approve {
             match self
                 .output
                 .confirm(&format!("Confirm tool {} call?", Self::NAME.to_uppercase()))
@@ -284,12 +306,18 @@ impl<T: Tool<Error = crate::tools::ToolError>> Tool for Guard<T> {
     }
 }
 
-fn guard<T: Tool>(tool: T, yolo: bool, output: Arc<dyn Output>) -> Guard<T> {
+fn guard<T: Tool>(
+    tool: T,
+    yolo: bool,
+    output: Arc<dyn Output>,
+    auto_approve: Option<Arc<dyn Fn(&T::Args) -> bool + Send + Sync>>,
+) -> Guard<T> {
     Guard {
         tool,
         yolo,
         output,
         always: Arc::new(AtomicBool::new(false)),
+        auto_approve,
     }
 }
 

@@ -188,23 +188,45 @@ pub async fn grep_text(pat: String, path: String) -> Result<String, ToolError> {
     })
 }
 
-#[rig_tool(description = "Run shell command", required(cmd))]
-pub async fn bash(cmd: String) -> Result<String, ToolError> {
-    let output = tokio::task::spawn_blocking(move || {
-        sh_dangerous(&cmd)
-            .stderr_to_stdout()
-            .unchecked()
-            .read()
-            .map_err(|e| ToolError::Io(e.to_string()))
-    })
-    .await??;
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct BashArgs {
+    pub cmd: String,
+}
 
-    let res = output.trim().to_string();
-    Ok(if res.is_empty() {
-        "(empty)".into()
-    } else {
-        res
-    })
+pub struct Bash;
+
+impl rig::tool::Tool for Bash {
+    type Args = BashArgs;
+    type Output = String;
+    type Error = ToolError;
+
+    const NAME: &'static str = "bash";
+
+    async fn definition(&self, _prompt: String) -> rig::completion::ToolDefinition {
+        rig::completion::ToolDefinition {
+            name: Self::NAME.into(),
+            description: "Run shell command".into(),
+            parameters: serde_json::to_value(schemars::schema_for!(BashArgs)).unwrap(),
+        }
+    }
+
+    async fn call(&self, args: Self::Args) -> std::result::Result<Self::Output, Self::Error> {
+        let output = tokio::task::spawn_blocking(move || {
+            sh_dangerous(&args.cmd)
+                .stderr_to_stdout()
+                .unchecked()
+                .read()
+                .map_err(|e| ToolError::Io(e.to_string()))
+        })
+        .await??;
+
+        let res = output.trim().to_string();
+        Ok(if res.is_empty() {
+            "(empty)".into()
+        } else {
+            res
+        })
+    }
 }
 
 #[rig_tool(description = "List files and directories in a path", required(path))]

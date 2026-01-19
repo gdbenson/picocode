@@ -1,50 +1,91 @@
-use clap::Parser;
-use picocode::{create_agent, AgentConfig, ConsoleOutput};
+use clap::{Parser, Subcommand};
+use picocode::{config::Config, create_agent, AgentConfig, ConsoleOutput};
 use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Minimal coding assistant")]
 struct Args {
+    #[command(subcommand)]
+    command: Option<Commands>,
+
     /// LLM provider (anthropic, openai, azure, cohere, deepseek, galadriel, gemini, groq, huggingface, hyperbolic, mira, mistral, moonshot, ollama, openrouter, perplexity, together, xai)
-    #[arg(short, long, default_value = "anthropic")]
-    provider: String,
+    #[arg(short, long, global = true)]
+    provider: Option<String>,
 
     /// LLM model name
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     model: Option<String>,
 
-    /// Interactive mode (default)
-    #[arg(short, long, default_value_t = true)]
-    interactive: bool,
-
-    /// Single prompt input
-    #[arg(long)]
-    input: Option<String>,
-
     /// Include the bash tool
-    #[arg(long)]
-    bash: bool,
+    #[arg(long, global = true)]
+    bash: Option<bool>,
 
     /// Run destructive tools without confirmation
-    #[arg(long)]
-    yolo: bool,
+    #[arg(long, global = true)]
+    yolo: Option<bool>,
 
     /// Run in quiet mode
-    #[arg(short, long)]
+    #[arg(short, long, global = true)]
     quiet: bool,
 
     /// Maximum number of tool calls per prompt
-    #[arg(long, default_value = "50")]
+    #[arg(long, default_value = "50", global = true)]
     tool_call_limit: usize,
 
     /// Choose a persona for the agent
-    #[arg(long, help = format!("Choose a persona for the agent. Available built-in personas:\n{}", picocode::persona::list_personas()))]
+    #[arg(long, help = format!("Choose a persona for the agent. Available built-in personas:\n{}", picocode::persona::list_personas()), global = true)]
     persona: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Start an interactive chat session (default)
+    Chat,
+    /// Run a single prompt
+    Input { prompt: String },
+    /// Run a pre-defined recipe from picocode.yaml
+    Recipe { name: String },
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
+    let config = Config::load();
+
+    let (command, prompt, recipe_name) = match args.command {
+        Some(Commands::Chat) | None => (Commands::Chat, None, None),
+        Some(Commands::Input { prompt }) => (Commands::Input { prompt: prompt.clone() }, Some(prompt), None),
+        Some(Commands::Recipe { name }) => (Commands::Recipe { name: name.clone() }, None, Some(name)),
+    };
+
+    let recipe = recipe_name
+        .as_ref()
+        .and_then(|name| config.recipes.get(name).cloned());
+
+    let provider = args
+        .provider
+        .or_else(|| recipe.as_ref().and_then(|r| r.provider.clone()))
+        .unwrap_or_else(|| "anthropic".to_string());
+
+    let model = args
+        .model
+        .or_else(|| recipe.as_ref().and_then(|r| r.model.clone()))
+        .unwrap_or_else(|| default_model(&provider));
+
+    let use_bash = args
+        .bash
+        .or_else(|| recipe.as_ref().and_then(|r| r.bash))
+        .unwrap_or(false);
+
+    let yolo = args
+        .yolo
+        .or_else(|| recipe.as_ref().and_then(|r| r.yolo))
+        .unwrap_or(false);
+
+    let persona_name = args
+        .persona
+        .or_else(|| recipe.as_ref().and_then(|r| r.persona.clone()));
+
     let output: Arc<dyn picocode::Output> = if args.quiet {
         Arc::new(picocode::QuietOutput::new())
     } else {
@@ -52,10 +93,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let system_message_extension = picocode::agent::load_agents_md();
-    let persona_prompt = args.persona.as_ref().and_then(|p| picocode::persona::get_persona(p));
-    let persona_name = args.persona.clone();
+    let persona_prompt = persona_name
+        .as_ref()
+        .and_then(|p| picocode::persona::get_persona(p));
 
-    let model = args.model.clone().unwrap_or_else(|| match args.provider.as_str() {
+    let agent = create_agent(AgentConfig {
+        provider: provider.clone(),
+        model,
+        output,
+        use_bash,
+        yolo,
+        tool_call_limit: args.tool_call_limit,
+        system_message_extension,
+        persona_prompt,
+        persona_name,
+        bash_auto_allow: Some(config.get_bash_auto_allow()),
+    })
+    .await?;
+
+    match command {
+        Commands::Recipe { name: _ } => {
+            if let Some(r) = recipe {
+                agent.run_once(r.prompt).await?;
+            } else {
+                eprintln!("Error: Recipe not found");
+                std::process::exit(1);
+            }
+        }
+        Commands::Input { prompt } => {
+            let response = agent.run_once(prompt).await?;
+            if args.quiet {
+                println!("{}", response);
+            }
+        }
+        Commands::Chat => {
+            if let Some(p) = prompt {
+                let response = agent.run_once(p).await?;
+                if args.quiet {
+                    println!("{}", response);
+                }
+            } else {
+                agent.run_interactive().await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn default_model(provider: &str) -> String {
+    match provider {
         "anthropic" => "claude-3-5-sonnet-20241022".to_string(),
         "openai" => "gpt-4o-mini".to_string(),
         "azure" => "gpt-4o".to_string(),
@@ -75,29 +162,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "xai" => "grok-1".to_string(),
         "gemini" | "google" => "gemini-1.5-pro".to_string(),
         _ => "unknown".to_string(),
-    });
-
-    let agent = create_agent(AgentConfig {
-        provider: args.provider.clone(),
-        model,
-        output,
-        use_bash: args.bash,
-        yolo: args.yolo,
-        tool_call_limit: args.tool_call_limit,
-        system_message_extension,
-        persona_prompt,
-        persona_name,
-    }).await?;
-
-    match args.input {
-        Some(p) => {
-            let response = agent.run_once(p).await?;
-            if args.quiet {
-                println!("{}", response);
-            }
-        }
-        None => agent.run_interactive().await?,
     }
-
-    Ok(())
 }
