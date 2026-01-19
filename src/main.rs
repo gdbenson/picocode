@@ -8,6 +8,10 @@ struct Args {
     #[command(subcommand)]
     command: Option<Commands>,
 
+    /// Positional prompt (shortcut for 'input')
+    #[arg(index = 1)]
+    prompt: Option<String>,
+
     /// LLM provider (anthropic, openai, azure, cohere, deepseek, galadriel, gemini, groq, huggingface, hyperbolic, mira, mistral, moonshot, ollama, openrouter, perplexity, together, xai)
     #[arg(short, long, global = true)]
     provider: Option<String>,
@@ -48,10 +52,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let config = Config::load();
 
-    let (command, prompt, recipe_name) = match args.command {
-        Some(Commands::Chat) | None => (Commands::Chat, None, None),
-        Some(Commands::Input { prompt }) => (Commands::Input { prompt: prompt.clone() }, Some(prompt), None),
-        Some(Commands::Recipe { name }) => (Commands::Recipe { name: name.clone() }, None, Some(name)),
+    let (command, prompt, recipe_name) = match (&args.command, &args.prompt) {
+        (Some(Commands::Recipe { name }), _) => (
+            Commands::Recipe { name: name.clone() },
+            None,
+            Some(name.clone()),
+        ),
+        (Some(Commands::Input { prompt }), _) => (
+            Commands::Input { prompt: prompt.clone() },
+            Some(prompt.clone()),
+            None,
+        ),
+        (Some(Commands::Chat), _) => (Commands::Chat, None, None),
+        (None, Some(p)) => (Commands::Input { prompt: p.clone() }, Some(p.clone()), None),
+        (None, None) => (Commands::Chat, None, None),
     };
 
     let recipe = recipe_name
