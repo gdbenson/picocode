@@ -78,7 +78,7 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let config = Config::load();
+    let config = Config::load()?;
 
     let (command, prompt, recipe_name) = match (&args.command, &args.prompt) {
         (Some(Commands::Recipe { name }), _) => (

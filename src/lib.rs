@@ -25,6 +25,9 @@ pub enum PicocodeError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    #[error("YAML error: {0}")]
+    Yaml(#[from] serde_yaml::Error),
+
     #[error("Tool error: {0}")]
     Tool(String),
 

@@ -28,18 +28,18 @@ pub struct Recipe {
 }
 
 impl Config {
-    pub fn load() -> Self {
+    pub fn load() -> crate::Result<Self> {
         let paths = ["picocode.yaml", "picocode.yml"];
         for path in paths {
-            if Path::new(path).exists() {
-                if let Ok(content) = std::fs::read_to_string(path) {
-                    if let Ok(config) = serde_yaml::from_str::<Config>(&content) {
-                        return config;
-                    }
-                }
+            let p = Path::new(path);
+            if p.exists() {
+                let content = std::fs::read_to_string(p).map_err(crate::PicocodeError::Io)?;
+                let config = serde_yaml::from_str::<Config>(&content)
+                    .map_err(crate::PicocodeError::Yaml)?;
+                return Ok(config);
             }
         }
-        Config::default()
+        Ok(Config::default())
     }
 
     pub fn get_bash_auto_allow(&self) -> Vec<String> {

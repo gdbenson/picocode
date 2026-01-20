@@ -194,7 +194,12 @@ pub async fn create_agent(config: AgentConfig) -> Result<Box<dyn PicoAgent>> {
             check_env!("MOONSHOT_API_KEY");
             build!(moonshot::Client::from_env())
         }
-        "ollama" => build!(ollama::Client::from_env()),
+        "ollama" => {
+            if std::env::var("OLLAMA_API_BASE_URL").is_err() {
+                std::env::set_var("OLLAMA_API_BASE_URL", "http://localhost:11434");
+            }
+            build!(ollama::Client::from_env())
+        }
         "openrouter" => {
             check_env!("OPENROUTER_API_KEY");
             build!(openrouter::Client::from_env())
