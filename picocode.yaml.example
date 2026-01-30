@@ -2,6 +2,8 @@
 
 # Custom agent prompt (replaces the default "Concise coding assistant" prompt)
 # agent_prompt: "You are a senior software engineer specialized in Rust and systems programming."
+# Or load from a file:
+# agent_prompt_file: "prompts/custom_agent.txt"
 
 # Tool-specific configurations
 tool_config:
@@ -21,6 +23,8 @@ recipes:
     model: "claude-3-5-sonnet-20241022"
     persona: "security"
     yolo: false
+    # If the response matches this regex, exit with error (e.g. for CI/CD)
+    # error_if: "CRITICAL|FAIL|vulnerability found"
 
   simplify:
     prompt: "Refactor the most complex functions in the current directory to be simpler and more readable. Maintain the same behavior."
@@ -29,3 +33,7 @@ recipes:
   fix-lints:
     prompt: "Run the project's linter and fix all reported issues."
     yolo: true
+
+  custom-review:
+    prompt_file: "prompts/review.txt"
+    model: "gpt-4o"

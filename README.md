@@ -77,6 +77,10 @@ recipes:
     prompt: "Review the codebase for security issues."
     persona: "security"
     model: "claude-3-5-sonnet-latest"
+  
+  review-from-file:
+    prompt_file: "prompts/security_review.txt"
+    persona: "security"
 ```
 
 Run it with:

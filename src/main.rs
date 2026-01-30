@@ -35,6 +35,10 @@ struct Args {
     /// Choose a persona for the agent
     #[arg(long, help = format!("Choose a persona for the agent. Available built-in personas:\n{}", picocode::persona::list_personas()), global = true)]
     persona: Option<String>,
+
+    /// Path to config file (default: picocode.yaml or picocode.yml in current directory)
+    #[arg(short, long, global = true)]
+    config: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -78,7 +82,7 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let config = Config::load()?;
+    let config = Config::load(args.config.as_deref())?;
 
     let (command, prompt, recipe_name) = match (&args.command, &args.prompt) {
         (Some(Commands::Recipe { name }), _) => (
@@ -119,7 +123,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .persona
         .or_else(|| recipe.as_ref().and_then(|r| r.persona.clone()));
 
-    let output: Arc<dyn picocode::Output> = if args.quiet {
+    let output: Arc<dyn picocode::Output> = if args.quiet || recipe.as_ref().map(|r| r.quiet).unwrap_or(false) {
         Arc::new(picocode::QuietOutput::new())
     } else {
         Arc::new(ConsoleOutput::new())
@@ -140,14 +144,27 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         persona_prompt,
         persona_name,
         bash_auto_allow: Some(config.get_bash_auto_allow()),
-        agent_prompt: config.agent_prompt.clone(),
+        agent_prompt: picocode::config::read_prompt(
+            config.agent_prompt.clone(),
+            config.agent_prompt_file.clone(),
+        )?,
     })
     .await?;
 
     match command {
         Commands::Recipe { name: _ } => {
             if let Some(r) = recipe {
-                agent.run_once(r.prompt).await?;
+                let prompt = picocode::config::read_prompt(r.prompt.clone(), r.prompt_file.clone())?
+                    .ok_or("Recipe must have either 'prompt' or 'prompt_file'")?;
+                let response = agent.run_once(prompt).await?;
+                if r.is_error(&response)? {
+                    return Err(Box::new(picocode::PicocodeError::Other(
+                        "Response matched error_if pattern".to_string(),
+                    )));
+                }
+                if args.quiet || r.quiet {
+                    println!("{}", response);
+                }
             } else {
                 eprintln!("Error: Recipe not found");
                 std::process::exit(1);
