@@ -47,21 +47,21 @@ Or, download directly from [releases](https://github.com/jondot/picocode/release
 
 Picocode isn't just a tool; it has character. Use `--persona` to change the agent's expertise and "vibe":
 
-| Persona | Description | "Voice" |
-| :--- | :--- | :--- |
-| `architect` | High-level software architect. | *"This abstraction needs more Cowbell. Let's refactor."* |
-| `strict` | Swiss-clock precision engineer. | *"Zero tolerance for fluff. Applying optimal logic."* |
-| `security` | Bruce Schneier fan, paranoid analyst. | *"Searching for vulnerabilities... trust nothing."* |
-| `zen` | Minimalist, focused on simplicity. | *"Code is a form of meditation. Let's find the path."* |
-| `hacker` | Chaotic good, assembly dreamer. | *"I found a 2ms optimization. Applying now."* |
-| `guru` | Visionary Silicon Valley disruptor. | *"Let's move the needle and scale this to infinity."* |
-| `sysadmin` | Grumpy, old-school server legend. | *"Back in my day, we didn't need these fancy LLMs..."* |
-| `academic` | Formal professor, theory first. | *"As per the 1974 paper by Knuth, this is suboptimal."* |
-| `hustler` | MVP-focused startup survivor. | *"Ship it! We'll fix the debt after the Series A."* |
-| `craftsman` | Accessibility & semantic HTML purist. | *"Semantic HTML is the foundation of a healthy web."* |
-| `sre` | Reliability and observability ninja. | *"But how will we monitor this in production?"* |
-| `maintainer` | Patient, docs-loving OSS saint. | *"Could you add a test case and update the README?"* |
-| `tester` | Destructive edge-case finder. | *"I'm going to try passing a null to this and watch it burn."* |
+| Persona      | Description                           | "Voice"                                                        |
+| :----------- | :------------------------------------ | :------------------------------------------------------------- |
+| `architect`  | High-level software architect.        | _"This abstraction needs more Cowbell. Let's refactor."_       |
+| `strict`     | Swiss-clock precision engineer.       | _"Zero tolerance for fluff. Applying optimal logic."_          |
+| `security`   | Bruce Schneier fan, paranoid analyst. | _"Searching for vulnerabilities... trust nothing."_            |
+| `zen`        | Minimalist, focused on simplicity.    | _"Code is a form of meditation. Let's find the path."_         |
+| `hacker`     | Chaotic good, assembly dreamer.       | _"I found a 2ms optimization. Applying now."_                  |
+| `guru`       | Visionary Silicon Valley disruptor.   | _"Let's move the needle and scale this to infinity."_          |
+| `sysadmin`   | Grumpy, old-school server legend.     | _"Back in my day, we didn't need these fancy LLMs..."_         |
+| `academic`   | Formal professor, theory first.       | _"As per the 1974 paper by Knuth, this is suboptimal."_        |
+| `hustler`    | MVP-focused startup survivor.         | _"Ship it! We'll fix the debt after the Series A."_            |
+| `craftsman`  | Accessibility & semantic HTML purist. | _"Semantic HTML is the foundation of a healthy web."_          |
+| `sre`        | Reliability and observability ninja.  | _"But how will we monitor this in production?"_                |
+| `maintainer` | Patient, docs-loving OSS saint.       | _"Could you add a test case and update the README?"_           |
+| `tester`     | Destructive edge-case finder.         | _"I'm going to try passing a null to this and watch it burn."_ |
 
 > [!TIP]
 > You can even add a local `AGENTS.md` file to give the agent custom codebase-specific instructions!
@@ -77,13 +77,14 @@ recipes:
     prompt: "Review the codebase for security issues."
     persona: "security"
     model: "claude-3-5-sonnet-latest"
-  
+
   review-from-file:
     prompt_file: "prompts/security_review.txt"
     persona: "security"
 ```
 
 Run it with:
+
 ```bash
 picocode recipe review-security
 ```
@@ -93,11 +94,13 @@ picocode recipe review-security
 Picocode is designed to be flexible, whether you're using it for a quick question or a complex automation task.
 
 ### Main Commands
+
 - **Interactive Chat**: `picocode` or `picocode chat` (Default)
 - **Single Prompt**: `picocode "your prompt"` or `picocode input "your prompt"`
 - **Recipes**: `picocode recipe <name>` (Runs a pre-defined task from `picocode.yaml`)
 
 ### Common Flags
+
 - `-p, --provider <PROVIDER>`: Override the default LLM provider (e.g., `openai`, `anthropic`, `ollama`).
 - `-m, --model <MODEL>`: Specify a specific model (e.g., `claude-3-5-sonnet-latest`, `gpt-4o`).
 - `--yolo`: Disable all confirmation prompts. **Use with caution.**
@@ -119,10 +122,12 @@ Picocode gives the AI a comprehensive set of tools to interact with your environ
 Picocode is built with Rust and the [Rig](https://github.com/0xPlayground/rig) library. It's designed to be extremely easy to extend.
 
 ### Prerequisites
+
 - [Rust](https://rustup.rs/) (latest stable)
 - API Keys for your preferred provider (e.g., `ANTHROPIC_API_KEY`)
 
 ### Local Setup
+
 ```bash
 # 1. Clone the repo
 git clone https://github.com/jondot/picocode.git
@@ -133,20 +138,21 @@ cargo run -- "Analyze src/main.rs"
 ```
 
 ### Adding a New Tool
+
 1. Open `src/tools.rs`.
 2. Use the `#[rig_tool]` macro to define your function.
 3. Register the tool in `src/agent.rs` within the `build_rig_agent` function.
 
 ### Project Structure
+
 - `src/main.rs`: CLI entry point and argument parsing.
 - `src/agent.rs`: Agent creation and system prompt logic.
 - `src/tools.rs`: Implementation of all AI-accessible tools.
 - `src/output.rs`: Terminal UI and progress indicators.
 
-
 ## 📚 Use as a Library
 
-Picocode is structured as a library (`lib.rs`) and a binary (`main.rs`). 
+Picocode is structured as a library (`lib.rs`) and a binary (`main.rs`).
 
 Example usage:
 

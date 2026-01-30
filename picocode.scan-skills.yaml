@@ -11,7 +11,7 @@ tool_config:
 recipes:
   scan-skills:
     provider: "openai"
-    model: "gpt-5-nano"
+    model: "gpt-5"
     persona: "security"
     yolo: false
     quiet: true
