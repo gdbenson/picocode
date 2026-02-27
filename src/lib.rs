@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 pub mod agent;
+pub mod input;
 pub mod output;
 pub mod tools;
 pub mod persona;

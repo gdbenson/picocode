@@ -5,6 +5,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 use termimad;
 
+use crate::input::InputEditor;
+use rustyline::error::ReadlineError;
+
 #[derive(Debug, PartialEq)]
 pub enum Confirmation {
     Yes,
@@ -31,6 +34,7 @@ pub trait Output: Send + Sync {
         limit: usize,
         persona: Option<&str>,
     );
+    fn display_mode_prompt(&self, prompt: &str);
 }
 
 pub struct QuietOutput {
@@ -101,6 +105,10 @@ impl Output for QuietOutput {
         _persona: Option<&str>,
     ) {
     }
+
+    fn display_mode_prompt(&self, _prompt: &str) {
+        // Quiet mode - no visual output
+    }
 }
 
 pub struct NoOutput;
@@ -128,6 +136,10 @@ impl Output for NoOutput {
         _limit: usize,
         _persona: Option<&str>,
     ) {
+    }
+
+    fn display_mode_prompt(&self, _prompt: &str) {
+        // No output
     }
 }
 
@@ -178,10 +190,15 @@ impl Output for LogOutput {
     ) {
         tracing::info!(target: "picocode", "picocode | {} | {} | persona:{} | yolo:{} limit:{}", provider, model, persona.unwrap_or("default"), yolo, limit);
     }
+
+    fn display_mode_prompt(&self, prompt: &str) {
+        tracing::info!(target: "picocode", "Mode prompt: {}", prompt);
+    }
 }
 
 pub struct ConsoleOutput {
     spinner: Mutex<Option<ProgressBar>>,
+    editor: Mutex<Option<InputEditor>>,
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
@@ -211,7 +228,31 @@ impl ConsoleOutput {
     pub fn new() -> Self {
         Self {
             spinner: Mutex::new(None),
+            editor: Mutex::new(None),
         }
+    }
+
+    fn init_editor_if_needed(&self) -> bool {
+        let mut editor_lock = self.editor.lock().unwrap();
+        if editor_lock.is_none() {
+            match InputEditor::new() {
+                Ok(ed) => {
+                    *editor_lock = Some(ed);
+                    true
+                }
+                Err(_) => false,
+            }
+        } else {
+            true
+        }
+    }
+
+    fn fallback_input() -> String {
+        use std::io::{self, Write};
+        let _ = io::stdout().flush();
+        let mut input = String::new();
+        let _ = io::stdin().read_line(&mut input);
+        input.trim().to_string()
     }
 }
 
@@ -326,12 +367,38 @@ impl Output for ConsoleOutput {
 
     fn get_user_input(&self) -> String {
         self.stop_thinking();
-        use std::io::{self, Write};
-        print!("{} ", style("❯").bold().blue());
-        let _ = io::stdout().flush();
-        let mut input = String::new();
-        let _ = io::stdin().read_line(&mut input);
-        input.trim().to_string()
+
+        // Try to use rustyline editor
+        if !self.init_editor_if_needed() {
+            // Editor initialization failed, use fallback
+            return Self::fallback_input();
+        }
+
+        let mut editor_guard = self.editor.lock().unwrap();
+        if let Some(ref mut editor) = *editor_guard {
+            match editor.readline("") {
+                Ok(line) => {
+                    editor.save_history();
+                    line
+                }
+                Err(ReadlineError::Interrupted) => {
+                    // Ctrl+C - exit gracefully
+                    std::process::exit(0);
+                }
+                Err(ReadlineError::Eof) => {
+                    // Ctrl+D - exit gracefully
+                    std::process::exit(0);
+                }
+                Err(_) => {
+                    // Other errors - fall back to basic input
+                    drop(editor_guard);  // Release lock before fallback
+                    Self::fallback_input()
+                }
+            }
+        } else {
+            drop(editor_guard);
+            Self::fallback_input()
+        }
     }
 
     fn display_error(&self, error: &str) {
@@ -435,5 +502,12 @@ impl Output for ConsoleOutput {
             style(format!("limit:{}", limit)).yellow(),
             style(cwd).dim()
         );
+    }
+
+    fn display_mode_prompt(&self, prompt: &str) {
+        self.stop_thinking();
+        use std::io::{self, Write};
+        print!("{} ", style(prompt).bold().green());
+        let _ = io::stdout().flush();
     }
 }

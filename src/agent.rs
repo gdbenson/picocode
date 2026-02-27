@@ -18,6 +18,21 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use async_trait::async_trait;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AgentMode {
+    Code,
+    Plan,
+}
+
+impl AgentMode {
+    fn prompt_symbol(&self) -> &'static str {
+        match self {
+            AgentMode::Code => "c>",
+            AgentMode::Plan => "p>",
+        }
+    }
+}
+
 #[async_trait]
 pub trait PicoAgent: Send + Sync {
     async fn run_interactive(self: Box<Self>) -> Result<()>;
@@ -34,21 +49,105 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
             self.tool_call_limit,
             self.persona_name.as_deref(),
         );
+
+        // Add usage hint
+        self.output.display_system("💡 Tip: Press Enter for new line, Alt+Enter to submit");
+
         let mut history = Vec::new();
+        let mut current_mode = AgentMode::Code;
+        let mut responses: Vec<String> = Vec::new(); // For /write
+
         loop {
             self.output.display_separator();
+
+            // Display mode-specific prompt
+            self.output.display_mode_prompt(current_mode.prompt_symbol());
             let input = self.output.get_user_input();
+
             if input.is_empty() {
                 continue;
             }
+
+            // Handle /plan command
+            if input == "/plan" {
+                if current_mode == AgentMode::Plan {
+                    self.output.display_system("Already in plan mode");
+                } else {
+                    current_mode = AgentMode::Plan;
+                    self.output.display_system("Switched to PLAN mode. Ask for a plan to begin exploration.");
+                }
+                continue;
+            }
+
+            // Handle /code command
+            if input == "/code" {
+                if current_mode == AgentMode::Code {
+                    self.output.display_system("Already in code mode");
+                } else {
+                    current_mode = AgentMode::Code;
+                    self.output.display_system("Switched to CODE mode. Ready to implement.");
+                }
+                continue;
+            }
+
+            // Handle /write command
+            if input.starts_with("/write") {
+                let filename = input
+                    .strip_prefix("/write")
+                    .unwrap()
+                    .trim();
+                let filename = if filename.is_empty() {
+                    "plan.md"
+                } else {
+                    filename
+                };
+
+                if let Some(last_response) = responses.last() {
+                    std::fs::write(filename, last_response)
+                        .map_err(|e| crate::PicocodeError::Other(format!("Failed to save response: {}", e)))?;
+                    self.output.display_system(&format!("Response saved to: {}", filename));
+                } else {
+                    self.output.display_system("No response to save yet");
+                }
+                continue;
+            }
+
+            // Handle /go command - switch to code mode and auto-implement
+            if input == "/go" {
+                if current_mode == AgentMode::Code {
+                    self.output.display_system("Already in code mode");
+                    continue;
+                }
+
+                current_mode = AgentMode::Code;
+                self.output.display_system("Switched to CODE mode. Implementing the plan...");
+                self.output.display_separator();
+
+                // Automatically send "Implement the plan." to the agent
+                let response = self.prompt("Implement the plan.", Some(&mut history)).await?;
+                responses.push(response.clone());
+                self.output.display_text(&response);
+                continue;
+            }
+
+            // Handle exit commands
             if input == "/q" || input == "exit" {
                 break;
             }
+
             self.output.display_separator();
 
-            let response = self.prompt(&input, Some(&mut history)).await?;
+            // Inject mode-specific context into the prompt
+            let prompt_with_mode = match current_mode {
+                AgentMode::Plan => format!("{}\n\nUser Request: {}", PLAN_MODE_PROMPT, input),
+                AgentMode::Code => input,
+            };
+
+            let response = self.prompt(&prompt_with_mode, Some(&mut history)).await?;
+            responses.push(response.clone());
             self.output.display_text(&response);
         }
+
         Ok(())
     }
 
@@ -284,6 +383,68 @@ Your mission is to assist the user in their development tasks by utilizing a set
 - **Security First**: Be vigilant about security vulnerabilities. Sanitize inputs, avoid hardcoded secrets, and follow least-privilege principles.
 - **Minimalism**: Don't add unnecessary dependencies or over-engineer solutions.
 - **Communication**: Keep explanations brief and focused on the "how" and "why" of your technical decisions.
+"#;
+
+const PLAN_MODE_PROMPT: &str = r#"You are picocode in PLANNING MODE. Your role is to explore, analyze, and design implementation plans before writing code.
+
+### PLANNING MODE WORKFLOW
+
+1. **Deep Exploration**: Start by thoroughly understanding the codebase
+   - Use `list_dir` to understand project structure
+   - Use `read_file` to examine relevant files
+   - Use `grep_text` to find patterns, functions, and related code
+   - Use `glob_files` to locate files by name patterns
+
+2. **Analysis**: Understand the problem in context
+   - What exists already that can be reused?
+   - What patterns does this codebase follow?
+   - What are the dependencies and constraints?
+   - What are potential edge cases or challenges?
+
+3. **Design**: Present a clear implementation plan
+   - Break down the task into logical steps
+   - Identify specific files to modify and why
+   - Suggest code patterns that match the existing codebase
+   - Consider testing and verification approaches
+   - Present the plan as structured markdown in your response
+
+4. **Iteration**: Be ready to refine the plan
+   - Answer questions about the approach
+   - Adjust based on user feedback
+   - Consider alternative approaches if requested
+
+### IMPORTANT GUIDELINES FOR PLANNING MODE
+
+- **Present plans in chat**: Write your plan as markdown in your response, not to a file
+- **Exploration over execution**: Focus on reading and understanding, not editing
+- **Be thorough but concise**: Provide enough detail to implement, but stay focused
+- **Avoid premature implementation**: Don't edit files or run commands unless necessary for understanding
+- **Ask clarifying questions**: If requirements are unclear, ask before finalizing the plan
+- **Think architecturally**: Consider how changes fit into the larger codebase
+
+### PLAN STRUCTURE TEMPLATE
+
+When presenting a plan, use this structure:
+
+```markdown
+## Implementation Plan: [Task Name]
+
+### Context
+- Why this change is needed
+- Current state of the codebase
+- Key files and components involved
+
+### Approach
+1. Step-by-step breakdown
+2. Files to modify and why
+3. Functions/components to add or change
+
+### Verification
+- How to test the changes
+- Edge cases to consider
+```
+
+Remember: You're in planning mode. The user will switch to code mode when ready to implement.
 "#;
 
 fn build_rig_agent<M: CompletionModel>(
