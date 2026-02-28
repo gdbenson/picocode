@@ -19,7 +19,7 @@ pub trait Output: Send + Sync {
     fn display_text(&self, text: &str);
     fn display_tool_call(&self, name: &str, args: &Value);
     fn display_tool_result(&self, result: &str);
-    fn get_user_input(&self) -> String;
+    fn get_user_input(&self, prompt: &str) -> String;
     fn display_error(&self, error: &str);
     fn display_system(&self, text: &str);
     fn confirm(&self, message: &str) -> Confirmation;
@@ -34,7 +34,6 @@ pub trait Output: Send + Sync {
         limit: usize,
         persona: Option<&str>,
     );
-    fn display_mode_prompt(&self, prompt: &str);
 }
 
 pub struct QuietOutput {
@@ -65,7 +64,7 @@ impl Output for QuietOutput {
     fn display_text(&self, _text: &str) {}
     fn display_tool_call(&self, _name: &str, _args: &Value) {}
     fn display_tool_result(&self, _result: &str) {}
-    fn get_user_input(&self) -> String {
+    fn get_user_input(&self, _prompt: &str) -> String {
         String::new()
     }
     fn display_error(&self, error: &str) {
@@ -105,10 +104,6 @@ impl Output for QuietOutput {
         _persona: Option<&str>,
     ) {
     }
-
-    fn display_mode_prompt(&self, _prompt: &str) {
-        // Quiet mode - no visual output
-    }
 }
 
 pub struct NoOutput;
@@ -117,7 +112,7 @@ impl Output for NoOutput {
     fn display_text(&self, _text: &str) {}
     fn display_tool_call(&self, _name: &str, _args: &Value) {}
     fn display_tool_result(&self, _result: &str) {}
-    fn get_user_input(&self) -> String {
+    fn get_user_input(&self, _prompt: &str) -> String {
         String::new()
     }
     fn display_error(&self, _error: &str) {}
@@ -137,10 +132,6 @@ impl Output for NoOutput {
         _persona: Option<&str>,
     ) {
     }
-
-    fn display_mode_prompt(&self, _prompt: &str) {
-        // No output
-    }
 }
 
 pub struct LogOutput;
@@ -158,7 +149,7 @@ impl Output for LogOutput {
         tracing::info!(target: "picocode", "Tool result: {}", result);
     }
 
-    fn get_user_input(&self) -> String {
+    fn get_user_input(&self, _prompt: &str) -> String {
         String::new()
     }
 
@@ -189,10 +180,6 @@ impl Output for LogOutput {
         persona: Option<&str>,
     ) {
         tracing::info!(target: "picocode", "picocode | {} | {} | persona:{} | yolo:{} limit:{}", provider, model, persona.unwrap_or("default"), yolo, limit);
-    }
-
-    fn display_mode_prompt(&self, prompt: &str) {
-        tracing::info!(target: "picocode", "Mode prompt: {}", prompt);
     }
 }
 
@@ -365,7 +352,7 @@ impl Output for ConsoleOutput {
         }
     }
 
-    fn get_user_input(&self) -> String {
+    fn get_user_input(&self, prompt: &str) -> String {
         self.stop_thinking();
 
         // Try to use rustyline editor
@@ -376,7 +363,7 @@ impl Output for ConsoleOutput {
 
         let mut editor_guard = self.editor.lock().unwrap();
         if let Some(ref mut editor) = *editor_guard {
-            match editor.readline("") {
+            match editor.readline(prompt) {
                 Ok(line) => {
                     editor.save_history();
                     line
@@ -420,7 +407,7 @@ impl Output for ConsoleOutput {
             style("n").bold(),
             style("s").bold()
         );
-        let input = self.get_user_input().to_lowercase();
+        let input = self.get_user_input("").to_lowercase();
         match input.as_str() {
             "y" | "yes" => Confirmation::Yes,
             "s" | "session" => Confirmation::Always,
@@ -504,10 +491,4 @@ impl Output for ConsoleOutput {
         );
     }
 
-    fn display_mode_prompt(&self, prompt: &str) {
-        self.stop_thinking();
-        use std::io::{self, Write};
-        print!("{} ", style(prompt).bold().green());
-        let _ = io::stdout().flush();
-    }
 }

@@ -60,9 +60,8 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
         loop {
             self.output.display_separator();
 
-            // Display mode-specific prompt
-            self.output.display_mode_prompt(current_mode.prompt_symbol());
-            let input = self.output.get_user_input();
+            let prompt = format!("{} ", current_mode.prompt_symbol());
+            let input = self.output.get_user_input(&prompt);
 
             if input.is_empty() {
                 continue;
