@@ -1,14 +1,18 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Editor};
 use rustyline::history::FileHistory;
 use rustyline::{Cmd, ConditionalEventHandler, Event, EventContext, EventHandler, KeyEvent, RepeatCount};
 use rustyline::config::Configurer;
 
-struct SmartEnterHandler;
+struct SmartEnterHandler {
+    always_submit: Arc<AtomicBool>,
+}
 
 impl ConditionalEventHandler for SmartEnterHandler {
     fn handle(&self, _evt: &Event, _n: RepeatCount, _positive: bool, ctx: &EventContext) -> Option<Cmd> {
-        if ctx.line().starts_with('/') {
+        if self.always_submit.load(Ordering::Relaxed) || ctx.line().starts_with('/') {
             Some(Cmd::AcceptLine)
         } else {
             Some(Cmd::Newline)
@@ -19,6 +23,7 @@ impl ConditionalEventHandler for SmartEnterHandler {
 pub struct InputEditor {
     editor: Editor<(), FileHistory>,
     history_path: Option<std::path::PathBuf>,
+    always_submit: Arc<AtomicBool>,
 }
 
 impl InputEditor {
@@ -40,16 +45,17 @@ impl InputEditor {
         }
 
         // Configure keybindings
-        Self::setup_keybindings(&mut editor);
+        let always_submit = Arc::new(AtomicBool::new(false));
+        Self::setup_keybindings(&mut editor, always_submit.clone());
 
-        Ok(Self { editor, history_path })
+        Ok(Self { editor, history_path, always_submit })
     }
 
-    fn setup_keybindings(editor: &mut Editor<(), FileHistory>) {
+    fn setup_keybindings(editor: &mut Editor<(), FileHistory>, always_submit: Arc<AtomicBool>) {
         // Enter: submit slash commands, newline for everything else
         let _ = editor.bind_sequence(
             KeyEvent::new('\r', rustyline::Modifiers::NONE),
-            EventHandler::Conditional(Box::new(SmartEnterHandler))
+            EventHandler::Conditional(Box::new(SmartEnterHandler { always_submit }))
         );
 
         // Alt+Enter submits the input
@@ -63,6 +69,10 @@ impl InputEditor {
             KeyEvent::alt('j'),
             EventHandler::Simple(Cmd::AcceptLine)
         );
+    }
+
+    pub fn set_submit_on_enter(&self, value: bool) {
+        self.always_submit.store(value, Ordering::Relaxed);
     }
 
     pub fn readline(&mut self, prompt: &str) -> Result<String, ReadlineError> {

@@ -1,9 +1,18 @@
 use console::{style, StyledObject, Term};
 use indicatif::{ProgressBar, ProgressStyle};
+use regex::Regex;
 use serde_json::Value;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
-use termimad;
+use syntect::easy::HighlightLines;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
+use termimad::crossterm::style::Attribute;
+use termimad::{CompoundStyle, MadSkin};
+
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 
 use crate::input::InputEditor;
 use rustyline::error::ReadlineError;
@@ -255,6 +264,35 @@ impl ConsoleOutput {
         println!("{}", style("─".repeat(width)).dim());
     }
 
+    fn markdown_skin() -> MadSkin {
+        let mut skin = MadSkin::no_style();
+        // Text styles - use attributes only, no color changes
+        skin.bold = CompoundStyle::with_attr(Attribute::Bold);
+        skin.italic = CompoundStyle::with_attr(Attribute::Italic);
+        skin.strikeout = CompoundStyle::with_attr(Attribute::CrossedOut);
+        // Headers: bold, left-aligned, default colors
+        for h in &mut skin.headers {
+            h.compound_style = CompoundStyle::with_attr(Attribute::Bold);
+            h.align = termimad::Alignment::Left;
+        }
+        // Inline code: default terminal colors
+        skin.inline_code = CompoundStyle::default();
+        skin
+    }
+
+    fn print_highlighted_code(lang: &str, code: &str) {
+        let syntax = SYNTAX_SET
+            .find_syntax_by_token(lang)
+            .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
+        let theme = &THEME_SET.themes["base16-ocean.dark"];
+        let mut h = HighlightLines::new(syntax, theme);
+        for line in LinesWithEndings::from(code) {
+            let ranges = h.highlight_line(line, &SYNTAX_SET).unwrap();
+            print!("{}", as_24_bit_terminal_escaped(&ranges[..], false));
+        }
+        print!("\x1b[0m");
+    }
+
     fn create_spinner(message: &str) -> ProgressBar {
         let pb = ProgressBar::new_spinner();
         pb.enable_steady_tick(Duration::from_millis(120));
@@ -266,15 +304,111 @@ impl ConsoleOutput {
         pb.set_message(message.to_string());
         pb
     }
+
+    fn get_user_input_with_mode(&self, prompt: &str, submit_on_enter: bool) -> String {
+        self.stop_thinking();
+
+        // Try to use rustyline editor
+        if !self.init_editor_if_needed() {
+            // Editor initialization failed, use fallback
+            return Self::fallback_input();
+        }
+
+        let mut editor_guard = self.editor.lock().unwrap();
+        if let Some(ref mut editor) = *editor_guard {
+            // Set submit mode AFTER editor is initialized
+            editor.set_submit_on_enter(submit_on_enter);
+
+            match editor.readline(prompt) {
+                Ok(line) => {
+                    editor.save_history();
+                    // Restore normal mode
+                    editor.set_submit_on_enter(false);
+                    line
+                }
+                Err(ReadlineError::Interrupted) => {
+                    // Ctrl+C - exit gracefully
+                    std::process::exit(0);
+                }
+                Err(ReadlineError::Eof) => {
+                    // Ctrl+D - exit gracefully
+                    std::process::exit(0);
+                }
+                Err(_) => {
+                    // Other errors - restore normal mode and fall back
+                    editor.set_submit_on_enter(false);
+                    drop(editor_guard);  // Release lock before fallback
+                    Self::fallback_input()
+                }
+            }
+        } else {
+            drop(editor_guard);
+            Self::fallback_input()
+        }
+    }
 }
 
 impl Output for ConsoleOutput {
     fn display_text(&self, text: &str) {
         self.stop_thinking();
         println!();
-        print!("{} ", style("⏺").cyan());
-        termimad::print_inline(text);
-        println!();
+
+        let skin = Self::markdown_skin();
+        let fence_re = Regex::new(r"(?m)^```(\w*)\n([\s\S]*?)^```$").unwrap();
+
+        let mut last_end = 0;
+        let mut first_segment = true;
+
+        for cap in fence_re.captures_iter(text) {
+            let m = cap.get(0).unwrap();
+
+            // Render prose before this code block
+            let prose = &text[last_end..m.start()];
+            if !prose.trim().is_empty() {
+                if first_segment {
+                    // Print icon on first line, then rest via skin
+                    let mut lines = prose.splitn(2, '\n');
+                    let first_line = lines.next().unwrap_or("");
+                    print!("{} ", style("⏺").cyan());
+                    skin.print_text(first_line);
+                    if let Some(rest) = lines.next() {
+                        skin.print_text(rest);
+                    }
+                    first_segment = false;
+                } else {
+                    skin.print_text(prose);
+                }
+            } else if first_segment {
+                print!("{} ", style("⏺").cyan());
+                println!();
+                first_segment = false;
+            }
+
+            let lang = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+            let code = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+            Self::print_highlighted_code(lang, code);
+
+            last_end = m.end();
+        }
+
+        // Render any trailing prose
+        let trailing = &text[last_end..];
+        if !trailing.trim().is_empty() {
+            if first_segment {
+                let mut lines = trailing.splitn(2, '\n');
+                let first_line = lines.next().unwrap_or("");
+                print!("{} ", style("⏺").cyan());
+                skin.print_text(first_line);
+                if let Some(rest) = lines.next() {
+                    skin.print_text(rest);
+                }
+            } else {
+                skin.print_text(trailing);
+            }
+        } else if first_segment {
+            print!("{} ", style("⏺").cyan());
+            println!();
+        }
     }
 
     fn display_tool_call(&self, name: &str, args: &Value) {
@@ -353,39 +487,7 @@ impl Output for ConsoleOutput {
     }
 
     fn get_user_input(&self, prompt: &str) -> String {
-        self.stop_thinking();
-
-        // Try to use rustyline editor
-        if !self.init_editor_if_needed() {
-            // Editor initialization failed, use fallback
-            return Self::fallback_input();
-        }
-
-        let mut editor_guard = self.editor.lock().unwrap();
-        if let Some(ref mut editor) = *editor_guard {
-            match editor.readline(prompt) {
-                Ok(line) => {
-                    editor.save_history();
-                    line
-                }
-                Err(ReadlineError::Interrupted) => {
-                    // Ctrl+C - exit gracefully
-                    std::process::exit(0);
-                }
-                Err(ReadlineError::Eof) => {
-                    // Ctrl+D - exit gracefully
-                    std::process::exit(0);
-                }
-                Err(_) => {
-                    // Other errors - fall back to basic input
-                    drop(editor_guard);  // Release lock before fallback
-                    Self::fallback_input()
-                }
-            }
-        } else {
-            drop(editor_guard);
-            Self::fallback_input()
-        }
+        self.get_user_input_with_mode(prompt, false)
     }
 
     fn display_error(&self, error: &str) {
@@ -407,7 +509,9 @@ impl Output for ConsoleOutput {
             style("n").bold(),
             style("s").bold()
         );
-        let input = self.get_user_input("").to_lowercase();
+
+        let input = self.get_user_input_with_mode("", true).to_lowercase();
+
         match input.as_str() {
             "y" | "yes" => Confirmation::Yes,
             "s" | "session" => Confirmation::Always,
