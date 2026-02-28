@@ -1,8 +1,20 @@
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Editor};
 use rustyline::history::FileHistory;
-use rustyline::{Cmd, EventHandler, KeyEvent};
+use rustyline::{Cmd, ConditionalEventHandler, Event, EventContext, EventHandler, KeyEvent, RepeatCount};
 use rustyline::config::Configurer;
+
+struct SmartEnterHandler;
+
+impl ConditionalEventHandler for SmartEnterHandler {
+    fn handle(&self, _evt: &Event, _n: RepeatCount, _positive: bool, ctx: &EventContext) -> Option<Cmd> {
+        if ctx.line().starts_with('/') {
+            Some(Cmd::AcceptLine)
+        } else {
+            Some(Cmd::Newline)
+        }
+    }
+}
 
 pub struct InputEditor {
     editor: Editor<(), FileHistory>,
@@ -34,10 +46,10 @@ impl InputEditor {
     }
 
     fn setup_keybindings(editor: &mut Editor<(), FileHistory>) {
-        // Enter adds a newline (reversed from default)
+        // Enter: submit slash commands, newline for everything else
         let _ = editor.bind_sequence(
             KeyEvent::new('\r', rustyline::Modifiers::NONE),
-            EventHandler::Simple(Cmd::Newline)
+            EventHandler::Conditional(Box::new(SmartEnterHandler))
         );
 
         // Alt+Enter submits the input
