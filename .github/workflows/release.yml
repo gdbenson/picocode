@@ -38,6 +38,11 @@ jobs:
             os: ubuntu-latest
             platform: linux-aarch64
             archive_format: tar.gz
+          # Linux riscv64: RISC-V 64-bit Linux systems
+          - target: riscv64gc-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-riscv64
+            archive_format: tar.gz
           # macOS x86_64: Intel Macs
           - target: x86_64-apple-darwin
             os: macos-latest
@@ -84,8 +89,15 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu
           rustup target add ${{ matrix.target }}
 
+      - name: Install cross-compilation dependencies (Linux riscv64)
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'riscv64gc-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-linux-gnu
+          rustup target add ${{ matrix.target }}
+
       - name: Install target
-        if: matrix.target != 'aarch64-unknown-linux-gnu' || matrix.os != 'ubuntu-latest'
+        if: (matrix.target != 'aarch64-unknown-linux-gnu' && matrix.target != 'riscv64gc-unknown-linux-gnu') || matrix.os != 'ubuntu-latest'
         run: rustup target add ${{ matrix.target }}
 
       - name: Cache cargo registry
@@ -109,6 +121,10 @@ jobs:
           CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
           AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          # Cross-compilation linker: use riscv64 gcc for Linux RISC-V builds
+          CC_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-gcc
+          AR_riscv64gc_unknown_linux_gnu: riscv64-linux-gnu-ar
+          CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_GNU_LINKER: riscv64-linux-gnu-gcc
 
       # Archive creation: wrap binary in platform-appropriate archive format
       # Linux/macOS: tar.gz (standard for Unix-like systems)
