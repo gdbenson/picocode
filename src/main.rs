@@ -193,7 +193,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn default_model(provider: &str) -> String {
     match provider {
-        "anthropic" => "claude-3-5-sonnet-20241022".to_string(),
+        "anthropic" => "claude-sonnet-4-6".to_string(),
         "openai" => "gpt-4o-mini".to_string(),
         "azure" => "gpt-4o".to_string(),
         "cohere" => "command-r-plus".to_string(),
