@@ -51,7 +51,7 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
         );
 
         // Add usage hint
-        self.output.display_system("💡 Tip: Press Enter for new line, Alt+Enter to submit");
+        self.output.display_system("💡 Tip: Press Enter for new line, Alt+Enter or Ctrl+Enter to submit. /help for commands.");
 
         let mut history = Vec::new();
         let mut current_mode = AgentMode::Code;
@@ -64,6 +64,24 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
             let input = self.output.get_user_input(&prompt);
 
             if input.is_empty() {
+                continue;
+            }
+
+            // Handle /help command
+            if input == "/help" || input == "/?" {
+                self.output.display_system("Commands:");
+                self.output.display_system("  /plan          Switch to PLAN mode for exploration");
+                self.output.display_system("  /code          Switch to CODE mode for implementation");
+                self.output.display_system("  /go            Switch to CODE mode and auto-implement the plan");
+                self.output.display_system("  /write [file]  Save last response to file (default: plan.md)");
+                self.output.display_system("  /help or /?    Show this help message");
+                self.output.display_system("  /q or exit     Quit picocode");
+                self.output.display_system("");
+                self.output.display_system("Keys:");
+                self.output.display_system("  Enter          New line (submits immediately for / commands)");
+                self.output.display_system("  Alt+Enter      Submit input");
+                self.output.display_system("  Ctrl+Enter     Submit input");
+                self.output.display_system("  Alt+J          Submit input");
                 continue;
             }
 
@@ -331,6 +349,19 @@ pub fn load_agents_md() -> Option<String> {
         return std::fs::read_to_string(path).ok();
     }
     None
+}
+
+pub fn load_claude_md() -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let root = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    let path = std::path::Path::new(&root).join("CLAUDE.md");
+    std::fs::read_to_string(path).ok()
 }
 
 #[derive(Clone)]

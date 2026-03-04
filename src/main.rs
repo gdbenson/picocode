@@ -129,7 +129,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(ConsoleOutput::new())
     };
 
-    let system_message_extension = picocode::agent::load_agents_md();
+    let agents_md = picocode::agent::load_agents_md();
+    let claude_md = picocode::agent::load_claude_md();
+    let system_message_extension = match (agents_md, claude_md) {
+        (Some(a), Some(c)) => Some(format!("{}\n\n{}", a, c)),
+        (Some(a), None) => Some(a),
+        (None, Some(c)) => Some(c),
+        (None, None) => None,
+    };
     let persona_prompt = persona_name
         .as_ref()
         .and_then(|p| picocode::persona::get_persona(p));

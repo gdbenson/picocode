@@ -69,6 +69,12 @@ impl InputEditor {
             KeyEvent::alt('j'),
             EventHandler::Simple(Cmd::AcceptLine)
         );
+
+        // Ctrl+Enter also submits the input
+        let _ = editor.bind_sequence(
+            KeyEvent::ctrl('\r'),
+            EventHandler::Simple(Cmd::AcceptLine)
+        );
     }
 
     pub fn set_submit_on_enter(&self, value: bool) {
