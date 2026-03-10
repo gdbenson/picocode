@@ -51,7 +51,7 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
         );
 
         // Add usage hint
-        self.output.display_system("💡 Tip: Press Enter for new line, Alt+Enter or Ctrl+Enter to submit. /help for commands.");
+        self.output.display_system("💡 Tip: Press Enter to submit, Shift+Enter for new line. /help for commands.");
 
         let mut history = Vec::new();
         let mut current_mode = AgentMode::Code;
@@ -75,13 +75,11 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
                 self.output.display_system("  /go            Switch to CODE mode and auto-implement the plan");
                 self.output.display_system("  /write [file]  Save last response to file (default: plan.md)");
                 self.output.display_system("  /help or /?    Show this help message");
-                self.output.display_system("  /q or exit     Quit picocode");
+                self.output.display_system("  /q or /exit    Quit picocode");
                 self.output.display_system("");
                 self.output.display_system("Keys:");
-                self.output.display_system("  Enter          New line (submits immediately for / commands)");
-                self.output.display_system("  Alt+Enter      Submit input");
-                self.output.display_system("  Ctrl+Enter     Submit input");
-                self.output.display_system("  Alt+J          Submit input");
+                self.output.display_system("  Enter          Submit input");
+                self.output.display_system("  Shift+Enter    New line");
                 continue;
             }
 
@@ -148,7 +146,7 @@ impl<M: CompletionModel + 'static> PicoAgent for CodeAgent<M> {
             }
 
             // Handle exit commands
-            if input == "/q" || input == "exit" {
+            if input == "/q" || input == "/exit" {
                 break;
             }
 

@@ -1,93 +1,108 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use rustyline::error::ReadlineError;
-use rustyline::{DefaultEditor, Editor};
-use rustyline::history::FileHistory;
-use rustyline::{Cmd, ConditionalEventHandler, Event, EventContext, EventHandler, KeyEvent, RepeatCount};
-use rustyline::config::Configurer;
+use reedline::{
+    default_emacs_keybindings, EditCommand, Emacs, FileBackedHistory, KeyCode, KeyModifiers,
+    Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus, Reedline,
+    ReedlineEvent, Signal,
+};
+use std::borrow::Cow;
 
-struct SmartEnterHandler {
-    always_submit: Arc<AtomicBool>,
+#[derive(Debug)]
+pub enum ReadlineError {
+    Interrupted,
+    Eof,
+    Other(String),
 }
 
-impl ConditionalEventHandler for SmartEnterHandler {
-    fn handle(&self, _evt: &Event, _n: RepeatCount, _positive: bool, ctx: &EventContext) -> Option<Cmd> {
-        if self.always_submit.load(Ordering::Relaxed) || ctx.line().starts_with('/') {
-            Some(Cmd::AcceptLine)
-        } else {
-            Some(Cmd::Newline)
-        }
+struct SimplePrompt {
+    text: String,
+}
+
+impl Prompt for SimplePrompt {
+    fn render_prompt_left(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.text)
+    }
+
+    fn render_prompt_right(&self) -> Cow<'_, str> {
+        Cow::Borrowed("")
+    }
+
+    fn render_prompt_indicator(&self, _edit_mode: PromptEditMode) -> Cow<'_, str> {
+        Cow::Borrowed("")
+    }
+
+    fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
+        Cow::Borrowed(".. ")
+    }
+
+    fn render_prompt_history_search_indicator(
+        &self,
+        history_search: PromptHistorySearch,
+    ) -> Cow<'_, str> {
+        let prefix = match history_search.status {
+            PromptHistorySearchStatus::Passing => "",
+            PromptHistorySearchStatus::Failing => "failing ",
+        };
+        Cow::Owned(format!("({}reverse-search: {}) ", prefix, history_search.term))
     }
 }
 
 pub struct InputEditor {
-    editor: Editor<(), FileHistory>,
-    history_path: Option<std::path::PathBuf>,
-    always_submit: Arc<AtomicBool>,
+    editor: Reedline,
 }
 
 impl InputEditor {
     pub fn new() -> Result<Self, String> {
-        let mut editor = DefaultEditor::new()
-            .map_err(|e| format!("Failed to create editor: {}", e))?;
+        let history_path = dirs::home_dir().map(|h| h.join(".picocode_history"));
 
-        // Configure editor
-        editor.set_auto_add_history(true);
-        let _ = editor.set_max_history_size(1000);
+        let mut keybindings = default_emacs_keybindings();
 
-        // Setup history file path
-        let history_path = dirs::home_dir()
-            .map(|h| h.join(".picocode_history"));
+        // Enter always submits
+        keybindings.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Enter,
+            ReedlineEvent::Submit,
+        );
 
-        // Try to load existing history
+        // Shift+Enter inserts newline (requires Kitty keyboard protocol)
+        keybindings.add_binding(
+            KeyModifiers::SHIFT,
+            KeyCode::Enter,
+            ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
+        );
+
+        let edit_mode = Box::new(Emacs::new(keybindings));
+
+        let mut editor = Reedline::create()
+            .with_edit_mode(edit_mode)
+            .use_kitty_keyboard_enhancement(true);
+
         if let Some(ref path) = history_path {
-            let _ = editor.load_history(path);
+            match FileBackedHistory::with_file(1000, path.clone()) {
+                Ok(history) => {
+                    editor = editor.with_history(Box::new(history));
+                }
+                Err(e) => {
+                    eprintln!("Warning: could not load history: {}", e);
+                }
+            }
         }
 
-        // Configure keybindings
-        let always_submit = Arc::new(AtomicBool::new(false));
-        Self::setup_keybindings(&mut editor, always_submit.clone());
-
-        Ok(Self { editor, history_path, always_submit })
-    }
-
-    fn setup_keybindings(editor: &mut Editor<(), FileHistory>, always_submit: Arc<AtomicBool>) {
-        // Enter: submit slash commands, newline for everything else
-        let _ = editor.bind_sequence(
-            KeyEvent::new('\r', rustyline::Modifiers::NONE),
-            EventHandler::Conditional(Box::new(SmartEnterHandler { always_submit }))
-        );
-
-        // Alt+Enter submits the input
-        let _ = editor.bind_sequence(
-            KeyEvent::alt('\r'),
-            EventHandler::Simple(Cmd::AcceptLine)
-        );
-
-        // Alt+J also works as alternative to submit
-        let _ = editor.bind_sequence(
-            KeyEvent::alt('j'),
-            EventHandler::Simple(Cmd::AcceptLine)
-        );
-
-        // Ctrl+Enter also submits the input
-        let _ = editor.bind_sequence(
-            KeyEvent::ctrl('\r'),
-            EventHandler::Simple(Cmd::AcceptLine)
-        );
-    }
-
-    pub fn set_submit_on_enter(&self, value: bool) {
-        self.always_submit.store(value, Ordering::Relaxed);
+        Ok(Self { editor })
     }
 
     pub fn readline(&mut self, prompt: &str) -> Result<String, ReadlineError> {
-        self.editor.readline(prompt)
+        let p = SimplePrompt {
+            text: prompt.to_string(),
+        };
+
+        match self.editor.read_line(&p) {
+            Ok(Signal::Success(line)) => Ok(line),
+            Ok(Signal::CtrlC) => Err(ReadlineError::Interrupted),
+            Ok(Signal::CtrlD) => Err(ReadlineError::Eof),
+            Err(e) => Err(ReadlineError::Other(e.to_string())),
+        }
     }
 
     pub fn save_history(&mut self) {
-        if let Some(ref path) = self.history_path {
-            let _ = self.editor.save_history(path);
-        }
+        let _ = self.editor.sync_history();
     }
 }

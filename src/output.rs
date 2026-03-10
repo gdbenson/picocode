@@ -15,7 +15,7 @@ static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_
 static THEME_SET: LazyLock<ThemeSet> = LazyLock::new(ThemeSet::load_defaults);
 
 use crate::input::InputEditor;
-use rustyline::error::ReadlineError;
+use crate::input::ReadlineError;
 
 #[derive(Debug, PartialEq)]
 pub enum Confirmation {
@@ -305,39 +305,28 @@ impl ConsoleOutput {
         pb
     }
 
-    fn get_user_input_with_mode(&self, prompt: &str, submit_on_enter: bool) -> String {
+    fn get_user_input_impl(&self, prompt: &str) -> String {
         self.stop_thinking();
 
-        // Try to use rustyline editor
         if !self.init_editor_if_needed() {
-            // Editor initialization failed, use fallback
             return Self::fallback_input();
         }
 
         let mut editor_guard = self.editor.lock().unwrap();
         if let Some(ref mut editor) = *editor_guard {
-            // Set submit mode AFTER editor is initialized
-            editor.set_submit_on_enter(submit_on_enter);
-
             match editor.readline(prompt) {
                 Ok(line) => {
                     editor.save_history();
-                    // Restore normal mode
-                    editor.set_submit_on_enter(false);
                     line
                 }
                 Err(ReadlineError::Interrupted) => {
-                    // Ctrl+C - exit gracefully
                     std::process::exit(0);
                 }
                 Err(ReadlineError::Eof) => {
-                    // Ctrl+D - exit gracefully
                     std::process::exit(0);
                 }
                 Err(_) => {
-                    // Other errors - restore normal mode and fall back
-                    editor.set_submit_on_enter(false);
-                    drop(editor_guard);  // Release lock before fallback
+                    drop(editor_guard);
                     Self::fallback_input()
                 }
             }
@@ -487,7 +476,7 @@ impl Output for ConsoleOutput {
     }
 
     fn get_user_input(&self, prompt: &str) -> String {
-        self.get_user_input_with_mode(prompt, false)
+        self.get_user_input_impl(prompt)
     }
 
     fn display_error(&self, error: &str) {
@@ -510,7 +499,7 @@ impl Output for ConsoleOutput {
             style("s").bold()
         );
 
-        let input = self.get_user_input_with_mode("", true).to_lowercase();
+        let input = self.get_user_input_impl("").to_lowercase();
 
         match input.as_str() {
             "y" | "yes" => Confirmation::Yes,

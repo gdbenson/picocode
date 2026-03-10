@@ -39,9 +39,48 @@ Or, download directly from [releases](https://github.com/jondot/picocode/release
 - **Tiny & Fast**: A single, compact binary written in Rust. No heavy dependencies, no bloat.
 - **Multi-LLM Sovereignty**: Works with Anthropic, OpenAI, DeepSeek, Google (Gemini), Ollama, and many more via [Rig](https://github.com/0xPlayground/rig).
 - **Interactive & Scriptable**: Use it as an interactive CLI, pipe it into scripts, or run automated **Recipes**.
+- **Plan & Code Modes**: Explore and design with `/plan`, then implement with `/code` or `/go`.
 - **Persona-driven**: Switch between different expert personalities (Architect, Security, Zen Master, etc.) to change how the agent thinks and speaks.
 - **Safety First**: Destructive actions (like deleting files or running shell commands) require manual confirmation by default.
 - **Extensible**: Use it as a CLI tool or integrate it as a Rust library in your own projects.
+
+## ⌨️ Interactive Input
+
+Picocode uses the [Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) for a modern editing experience:
+
+| Key | Action |
+| :--- | :--- |
+| `Enter` | Submit input |
+| `Shift+Enter` | Insert new line |
+| `Ctrl+C` | Exit |
+| `Ctrl+D` | Exit |
+
+> [!NOTE]
+> Shift+Enter requires a terminal that supports the Kitty keyboard protocol (Kitty, WezTerm, Ghostty, iTerm2, Alacritty). In other terminals, Shift+Enter acts the same as Enter. You can still paste multi-line input.
+
+## 📋 Slash Commands
+
+Use these commands during an interactive session:
+
+| Command | Description |
+| :--- | :--- |
+| `/plan` | Switch to **Plan** mode for exploration and design |
+| `/code` | Switch to **Code** mode for implementation |
+| `/go` | Switch to Code mode and auto-implement the plan |
+| `/write [file]` | Save the last response to a file (default: `plan.md`) |
+| `/help` or `/?` | Show help |
+| `/q` or `/exit` | Quit picocode |
+
+**Plan mode** focuses the agent on reading, analyzing, and producing structured implementation plans without modifying code. **Code mode** (the default) gives the agent full access to edit files, run commands, and implement changes.
+
+## 📄 Project Context with CLAUDE.md and AGENTS.md
+
+Picocode automatically loads project-specific instructions from two files:
+
+- **`CLAUDE.md`** — Loaded from the git repository root. Use this for codebase-wide conventions, architectural notes, or instructions that apply to every session.
+- **`AGENTS.md`** — Loaded from the current working directory. Use this for task-specific or directory-specific guidance.
+
+Both files are injected into the agent's system prompt, giving it context about your project without you having to repeat yourself.
 
 ## 🎭 The Persona Gallery
 
@@ -62,9 +101,6 @@ Picocode isn't just a tool; it has character. Use `--persona` to change the agen
 | `sre`        | Reliability and observability ninja.  | _"But how will we monitor this in production?"_                |
 | `maintainer` | Patient, docs-loving OSS saint.       | _"Could you add a test case and update the README?"_           |
 | `tester`     | Destructive edge-case finder.         | _"I'm going to try passing a null to this and watch it burn."_ |
-
-> [!TIP]
-> You can even add a local `AGENTS.md` file to give the agent custom codebase-specific instructions!
 
 ## ⚙️ Recipes & Automation
 
@@ -148,7 +184,8 @@ cargo run -- "Analyze src/main.rs"
 - `src/main.rs`: CLI entry point and argument parsing.
 - `src/agent.rs`: Agent creation and system prompt logic.
 - `src/tools.rs`: Implementation of all AI-accessible tools.
-- `src/output.rs`: Terminal UI and progress indicators.
+- `src/input.rs`: Line editor with Kitty keyboard protocol support.
+- `src/output.rs`: Terminal UI, markdown rendering, and progress indicators.
 
 ## 📚 Use as a Library
 
